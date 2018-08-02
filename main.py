@@ -15,7 +15,7 @@ flags.DEFINE_string('model_dir', 'ImageNet', 'using imagenet dataset')
 flags.DEFINE_string('logs_dir', 'logs', 'log directory')
 flags.DEFINE_bool('is_crop', True, 'crop images')
 flags.DEFINE_integer('epoches', 200, 'training epoches')
-flags.DEFINE_integer('fine_size', 256, 'fine size')
+flags.DEFINE_integer('fine_size', 64, 'fine size')
 flags.DEFINE_string('train_set', 'ImageNet', 'train phase')
 flags.DEFINE_string('val_set', 'Set5', 'val phase')
 flags.DEFINE_string('test_set', 'Set14', 'test phase')
@@ -39,8 +39,9 @@ def main(_):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9, allow_growth=True)
     config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
     with tf.Session(config=config) as sess:
-        srgan = SRGAN(FLAGS, batch_size=8, input_height=256, input_width=256, input_channels=3, sess=sess)
+        srgan = SRGAN(FLAGS, batch_size=8, input_height=64, input_width=64, input_channels=3, sess=sess)
         srgan.build_model()
+        # srgan.sample(1, 1)
         if FLAGS.is_training:
             srgan.train()
         if FLAGS.is_testing:

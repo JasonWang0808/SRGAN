@@ -6,6 +6,7 @@ import os
 from glob import glob
 from ops import *
 from utils import *
+import cv2
 
 class SRGAN:
     model_name = 'SRGAN'
@@ -48,15 +49,17 @@ class SRGAN:
                 conv2_out = shortcut+conv2
                 print(conv2_out) 
                 # pixel_shuffle_layer(x, r, n_split):
-                conv3 = slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3')
-                print(conv3)
-                shuffle1 = tf.nn.relu(pixel_shuffle_layer(conv3, 2, 64)) #64*2*2
-                print(shuffle1)
-                conv4 = slim.conv2d_transpose(shuffle1, 256, 3, 1, scope='g_conv4')
-                shuffle2 = tf.nn.relu(pixel_shuffle_layer(conv4, 2, 64))
-                print(shuffle2) 
-                conv5 = slim.conv2d_transpose(shuffle2, 3, 3, 1, scope='g_conv5')
-                print(conv5)
+                # conv3 = slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3')
+                # print(conv3)
+                # shuffle1 = tf.nn.relu(pixel_shuffle_layer(conv3, 2, 64)) #64*2*2
+                # print(shuffle1)
+                # conv4 = slim.conv2d_transpose(shuffle1, 256, 3, 1, scope='g_conv4')
+                # shuffle2 = tf.nn.relu(pixel_shuffle_layer(conv4, 2, 64))
+                # print(shuffle2)
+
+                conv3 = tf.nn.relu(slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3'))
+                conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
+                conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
                 self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
                 return tf.nn.tanh(conv5)
             
@@ -82,7 +85,7 @@ class SRGAN:
                 conv4 = leaky_relu(slim.batch_norm(slim.conv2d(conv3_1, 512, 3, 1, scope='d_conv4'), scope='d_bn_conv4'))
                 conv4_1 = leaky_relu(slim.batch_norm(slim.conv2d(conv4, 512, 3, 2, scope='d_conv4_1'), scope='d_bn_conv4_1'))
 
-                conv_flat = tf.reshape(conv4_1, [self.batch_size, -1])
+                conv_flat = tf.reshape(conv4_1, [-1, 1])
                 dense1 = leaky_relu(slim.fully_connected(conv_flat, 1024, scope='d_dense1'))
                 dense2 = slim.fully_connected(dense1, 1, scope='d_dense2')
                 
@@ -91,12 +94,14 @@ class SRGAN:
             
             
     def build_model(self):
-        self.input_target = tf.placeholder(tf.float32, [self.batch_size, self.input_height, self.input_width, self.input_channels], name='input_target')
-        # self.input_source = tf.placeholder(tf.float32, [self.batch_size, self.input_height, self.input_width, self.input_channels], name='input_source')
+        self.input_target = tf.placeholder(tf.float32, [None, self.input_height, self.input_width, self.input_channels], name='input_target')
+        self.input_source = tf.placeholder(tf.float32, [None, self.input_height, self.input_width, self.input_channels], name='input_source')
         
-        self.input_source = down_sample_layer(self.input_target)
-        
+        # self.input_source = down_sample_layer(self.input_target)
+
         self.real = self.input_target
+        # warning
+
         self.fake = self.generator(self.input_source, reuse=False)
         self.psnr = PSNR(self.real, self.fake)
         self.d_loss, self.g_loss, self.content_loss = self.inference_loss(self.real, self.fake)
@@ -118,18 +123,18 @@ class SRGAN:
 
     def inference_loss(self, real, fake):
         # vgg19 content loss
-        def inference_vgg19_content_loss(real, fake):
-            _, real_phi = self.vgg.build_model(real, tf.constant(False), False) # First
-            _, fake_phi = self.vgg.build_model(fake, tf.constant(False), True) # Second
-
-            content_loss = None
-            for i in range(len(real_phi)):
-                l2_loss = tf.nn.l2_loss(real_phi[i] - fake_phi[i])
-                if content_loss is None:
-                    content_loss = l2_loss
-                else:
-                    content_loss = content_loss + l2_loss
-            return tf.reduce_mean(content_loss)
+        # def inference_vgg19_content_loss(real, fake):
+        #     _, real_phi = self.vgg.build_model(real, tf.constant(False), False) # First
+        #     _, fake_phi = self.vgg.build_model(fake, tf.constant(False), True) # Second
+        #
+        #     content_loss = None
+        #     for i in range(len(real_phi)):
+        #         l2_loss = tf.nn.l2_loss(real_phi[i] - fake_phi[i])
+        #         if content_loss is None:
+        #             content_loss = l2_loss
+        #         else:
+        #             content_loss = content_loss + l2_loss
+        #     return tf.reduce_mean(content_loss)
         # MSE content loss
         def inference_mse_content_loss(real, fake):
             return tf.reduce_mean(tf.square(real-fake))
@@ -182,36 +187,47 @@ class SRGAN:
             np.random.shuffle(data)
             for idx in range(batch_idxs):
                 batch_files = data[idx*self.batch_size:(idx+1)*self.batch_size]
-                batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, self.images_norm) for batch_file in batch_files]
-                batch_x = np.array(batch_x).astype(np.float32)
+                batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in batch_files]
+                batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+                batch_x_input = [input_x[0] for input_x in batch_x]
+                batch_x_sample = [sample_x[1] for sample_x in batch_x]
+                batch_x_input = np.array(batch_x_input).astype(np.float32)
+                batch_x_sample = np.array(batch_x_sample).astype(np.float32)
     
                 if counter < 2e4:                      
-                    _, content_loss, psnr = self.sess.run([self.srres_optim, self.content_loss, self.psnr], feed_dict={self.input_target:batch_x})
+                    _, content_loss, psnr = self.sess.run([self.srres_optim, self.content_loss, self.psnr], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
                     end_time = time.time()
                     print('epoch{}[{}/{}]:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, content_loss, psnr))
                 else:
-                    _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_x})
-                    _, g_loss, psnr, summaries= self.sess.run([self.g_optim, self.g_loss, self.psnr, self.summaries], feed_dict={self.input_target:batch_x})
+                    _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
+                    _, g_loss, psnr, summaries= self.sess.run([self.g_optim, self.g_loss, self.psnr, self.summaries], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
                     end_time = time.time()
                     print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss, psnr))
                 #self.summary_writer.add_summary(summaries, global_step=counter)
-                if np.mod(counter, 100)==0:
+                if np.mod(counter, 10)==0:
                     self.sample(epoch, idx)
-                if np.mod(counter, 500)==0:
+                if np.mod(counter, 100)==0:
                     self.save_model(self.config.checkpoint_dir, counter)
                 counter = counter+1
             
     def sample(self,epoch, idx):
         # here I use set5 as the valuation sets
         data = glob(os.path.join(self.config.dataset_dir, 'val', self.config.val_set, '*.*'))
-        data = data[:self.batch_size]
-        batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, self.images_norm) for batch_file in data]
-        batch_x = np.array(batch_x).astype(np.float32)
+        data = data[0]
+        # batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in data]
+        #
+        # batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+        # batch_x_input = [input_x[0] for input_x in batch_x]
+        # batch_x_sample = [sample_x[1] for sample_x in batch_x]
+        # batch_x_input = np.array(batch_x_input).astype(np.float32)
+        # batch_x_sample = np.array(batch_x_sample).astype(np.float32)
+
+        h_, w_, input_, sample_ = get_sample_image(data, self.config.fine_size, self.images_norm)
+
+        sample_images, psnr, input_source = self.sess.run([self.fake, self.psnr, self.input_source], feed_dict={self.input_target:sample_, self.input_source:input_})
         
-        sample_images, psnr, input_source = self.sess.run([self.fake, self.psnr, self.input_source], feed_dict={self.input_target:batch_x})
-        
-        save_images(sample_images, [4,4], './{}/{}_sample_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx))
-        save_images(input_source, [4,4], './{}/{}_input_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx))
+        save_images(sample_images, [h_,w_], './{}/{}_sample_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx), self.images_norm)
+        save_images(input_source, [h_,w_], './{}/{}_input_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx), self.images_norm)
         print('---------------------------------------')
         print('epoch{}:psnr{:.4f}'.format(epoch, psnr))
         print('---------------------------------------')
@@ -230,8 +246,14 @@ class SRGAN:
         batch_files = test[:self.batch_size]
         batch_x = [get_images(batch_file, True, self.config.fine_size, self.images_norm) for batch_file in batch_files]
         batchs = np.array(batch_x).astype(np.float32)
+
+        batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+        batch_x_input = [input_x[0] for input_x in batch_x]
+        batch_x_sample = [sample_x[1] for sample_x in batch_x]
+        batch_x_input = np.array(batch_x_input).astype(np.float32)
+        batch_x_sample = np.array(batch_x_sample).astype(np.float32)
         
-        sample_images, input_sources = self.sess.run([self.fake, self.input_source], feed_dict={self.input_target:batchs})
+        sample_images, input_sources = self.sess.run([self.fake, self.input_source], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
         #images = np.concatenate([sample_images, batchs], 2)
         for i in range(len(batch_x)):
             batch = np.expand_dims(batchs[i],0)
@@ -272,8 +294,8 @@ class SRGAN:
             return False, 0
 
 if __name__=='__main__':
-    srgan = SRGAN()
-    a = tf.random_normal([64,24,24,3])
-    #out = srgan.generator(a)
-    out,_ = srgan.discriminator(a)
-    print(out)
+    srgan = SRGAN(None)
+    # a = tf.random_normal([8,64,64,3])
+    # out = srgan.generator(a)
+    # out,_ = srgan.discriminator(a)
+    # print(out)

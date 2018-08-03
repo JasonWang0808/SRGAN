@@ -5,15 +5,27 @@ import cv2
 
 def get_images(filename, is_crop, fine_size, images_norm):
     img = cv2.imread(filename)
-    if is_crop:
-        size = img.shape
-        start_h = int((size[0] - fine_size)/2)
-        start_w = int((size[1] - fine_size)/2)
-        img = img[start_h:start_h+fine_size, start_w:start_w+fine_size,:]
-    img = np.array(img).astype(np.float32)
+
     if images_norm:
         img = (img-127.5)/127.5
-    return img
+
+    images_ = []
+
+    if is_crop:
+        size = img.shape
+        h_ = int(size[0]) // fine_size
+        w_ = int(size[1]) // fine_size
+
+        for h in range(h_):
+            for w in range(w_):
+                image_temp = img[h*fine_size:(h+1)*fine_size, w*fine_size:(w+1)*fine_size, :]
+                images_.append(image_temp)
+
+    else:
+        img = np.array(img).astype(np.float32)
+        images_.append(img)
+
+    return images_
 
 
 def save_images(images, size, filename, images_norm):

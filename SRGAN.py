@@ -125,19 +125,6 @@ class SRGAN:
         print('builded model...') 
 
     def inference_loss(self, real, fake):
-        # vgg19 content loss
-        # def inference_vgg19_content_loss(real, fake):
-        #     _, real_phi = self.vgg.build_model(real, tf.constant(False), False) # First
-        #     _, fake_phi = self.vgg.build_model(fake, tf.constant(False), True) # Second
-        #
-        #     content_loss = None
-        #     for i in range(len(real_phi)):
-        #         l2_loss = tf.nn.l2_loss(real_phi[i] - fake_phi[i])
-        #         if content_loss is None:
-        #             content_loss = l2_loss
-        #         else:
-        #             content_loss = content_loss + l2_loss
-        #     return tf.reduce_mean(content_loss)
         # MSE content loss
         def inference_mse_content_loss(real, fake):
             return tf.reduce_mean(tf.square(real-fake))
@@ -173,7 +160,6 @@ class SRGAN:
 
         # data/train/*.*
         data = glob(os.path.join(self.config.dataset_dir, 'train', self.config.train_set, '*.*'))
-        batch_idxs = int(len(data)/self.batch_size)
 
         bool_check, counter = self.load_model(self.config.checkpoint_dir)
         if bool_check:
@@ -182,48 +168,54 @@ class SRGAN:
         else:
             print('[***] fail to load model')
             counter = 1
-        
-        print('total steps:{}'.format(self.config.epoches*batch_idxs))
-        
+
         start_time = time.time()
         for epoch in range(self.config.epoches):
             np.random.shuffle(data)
-            for idx in range(batch_idxs):
-                batch_files = data[idx*self.batch_size:(idx+1)*self.batch_size]
-                batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in batch_files]
-                batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
-                batch_x_input = [input_x[0] for input_x in batch_x]
-                batch_x_sample = [sample_x[1] for sample_x in batch_x]
-                batch_x_input = np.array(batch_x_input).astype(np.float32)
-                batch_x_sample = np.array(batch_x_sample).astype(np.float32)
-    
-                if counter < 2e4:
-                    _, content_loss, psnr = self.sess.run([self.srres_optim, self.content_loss, self.psnr], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
-                    end_time = time.time()
-                    print('epoch{}[{}/{}]:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, content_loss, psnr))
-                else:
-                    _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
-                    _, g_loss, psnr, summaries= self.sess.run([self.g_optim, self.g_loss, self.psnr, self.summaries], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
-                    end_time = time.time()
-                    print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss, psnr))
+            for file_name in data:
+                sav_images = get_images(file_name, self.config.is_crop, self.config.fine_size, images_norm=False)
+                images = np.asarray(sav_images)
+                images = images[:images.shape[0]//8 * 8, :, :, :]
+                batches = images.reshape([-1, self.batch_size, self.input_size, self.input_size, 3])
 
-                if np.mod(counter, 50)==0:
-                    self.sample(epoch, idx)
-                if np.mod(counter, 200)==0:
-                    self.save_model(self.config.checkpoint_dir, counter)
-                counter = counter+1
+                for batch_x in batches:
+                    batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
+                    batch_x_input = [input_x[0] for input_x in batch_x]
+                    batch_x_sample = [sample_x[1] for sample_x in batch_x]
+                    batch_x_input = np.array(batch_x_input).astype(np.float32)
+                    batch_x_sample = np.array(batch_x_sample).astype(np.float32)
+
+                    if counter < 2e4:
+                        _, content_loss, psnr = self.sess.run([self.srres_optim, self.content_loss, self.psnr],
+                                                              feed_dict={self.input_target: batch_x_sample,
+                                                                         self.input_source: batch_x_input})
+                        end_time = time.time()
+                        print(
+                            'epoch{}:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch, end_time - start_time,
+                                                                                                     content_loss, psnr))
+                    else:
+                        _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries],
+                                                             feed_dict={self.input_target: batch_x_sample,
+                                                                        self.input_source: batch_x_input})
+                        _, g_loss, psnr, summaries = self.sess.run([self.g_optim, self.g_loss, self.psnr, self.summaries],
+                                                                   feed_dict={self.input_target: batch_x_sample,
+                                                                              self.input_source: batch_x_input})
+                        end_time = time.time()
+                        print('epoch{}:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, end_time - start_time,
+                                                                                                               d_loss,
+                                                                                                               g_loss,
+                                                                                                               psnr))
+
+                    if np.mod(counter, 100) == 0:
+                        self.sample(epoch)
+                    if np.mod(counter, 500) == 0:
+                        self.save_model(self.config.checkpoint_dir, counter)
+                    counter = counter + 1
             
-    def sample(self,epoch, idx):
+    def sample(self,epoch):
         # here I use set5 as the valuation sets
         data = glob(os.path.join(self.config.dataset_dir, 'val', self.config.val_set, '*.*'))
         data = data[0]
-        # batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in data]
-        #
-        # batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
-        # batch_x_input = [input_x[0] for input_x in batch_x]
-        # batch_x_sample = [sample_x[1] for sample_x in batch_x]
-        # batch_x_input = np.array(batch_x_input).astype(np.float32)
-        # batch_x_sample = np.array(batch_x_sample).astype(np.float32)
 
         h_, w_, input_, sample_ = get_sample_image(data, self.input_size, self.output_size, self.images_norm)
 
@@ -236,8 +228,8 @@ class SRGAN:
 
         sample_images, psnr, input_source = self.sess.run([self.fake, self.psnr, self.input_source], feed_dict={self.input_target:sample_, self.input_source:input_})
         
-        save_images(sample_images, [h_,w_], './{}/{}_sample_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx), self.images_norm)
-        save_images(input_source, [h_,w_], './{}/{}_input_{}_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch, idx), self.images_norm)
+        save_images(sample_images, [h_,w_], './{}/{}_sample_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch), self.images_norm)
+        save_images(input_source, [h_,w_], './{}/{}_input_{}.png'.format(self.config.sample_dir, self.config.val_set,epoch), self.images_norm)
         print('---------------------------------------')
         print('epoch{}:psnr{:.4f}'.format(epoch, psnr))
         print('---------------------------------------')

@@ -45,3 +45,4 @@ def PSNR(real, fake):
     mse = tf.reduce_mean(tf.square(127.5*(real-fake)+127.5),axis=(-3,-2,-1))
     psnr = tf.reduce_mean(10 * (tf.log(255*255 / tf.sqrt(mse)) / np.log(10)))
     return psnr
+

@@ -19,7 +19,6 @@ def get_images(filename, is_crop, fine_size, images_norm):
 def save_images(images, size, filename, images_norm):
     h_, w_ = size[0], size[1]
     img_out = None
-    # img_samples = np.zeros([h_*self.config.fine_size, w_*self.config.fine_size, 3])
     for h in range(h_):
         img_samples = images[h * w_]
         for w in range(1, w_):
@@ -33,27 +32,39 @@ def save_images(images, size, filename, images_norm):
     return cv2.imwrite(filename, img_out)
 
 
-def blur_images(image, images_norm):
+def blur_images(image, images_norm, output_size):
     input_ = cv2.GaussianBlur(image, (7, 7), 0.9)
     image_ = image
     if images_norm:
         input_ = (input_-127.5)/127.5
         image_ = (image-127.5)/127.5
+    padding = int(input_.shape[0] - output_size)//2
+    image_ = image_[padding:padding+output_size, padding:padding+output_size, :]
     return input_, image_
 
 
-def get_sample_image(filename, fine_size, images_norm):
-    img = cv2.imread(filename)
-    size = img.shape
-    h = size[0] // fine_size
-    w = size[1] // fine_size
-    input_, sample_ = blur_images(img, images_norm)
+def get_sample_image(filename, input_size, output_size, images_norm):
+    assert input_size >= output_size
+    image = cv2.imread(filename)
+    size = image.shape
+    stride = output_size
+    h = (size[0] - input_size + 1) // stride + 1
+    w = (size[1] - input_size + 1) // stride + 1
+    padding = int(input_size - output_size)//2
+    # input_, sample_ = blur_images(img, images_norm, output_size)
+
+    input_ = cv2.GaussianBlur(image, (7, 7), 0.9)
+    sample_ = image
+    if images_norm:
+        input_ = (input_-127.5)/127.5
+        sample_ = (image-127.5)/127.5
+
     inputs_ = []
     samples_ = []
-    for x in range(0, size[0] - fine_size + 1, fine_size):
-        for y in range(0, size[1] - fine_size + 1, fine_size):
-            inputs_.append(input_[x:x + fine_size, y:y + fine_size])
-            samples_.append(sample_[x:x + fine_size, y:y + fine_size])
+    for x in range(0, size[0] - input_size + 1, stride):
+        for y in range(0, size[1] - input_size + 1, stride):
+            inputs_.append(input_[x:x + input_size, y:y + input_size])
+            samples_.append(sample_[x+padding:x+padding + output_size, y+padding:y+padding + output_size])
 
     inputs_ = np.array(inputs_).astype(np.float32)
     samples_ = np.array(samples_).astype(np.float32)

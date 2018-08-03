@@ -10,24 +10,22 @@ import cv2
 
 class SRGAN:
     model_name = 'SRGAN'
-    def __init__(self, config, batch_size=1, input_height=256, input_width=256, input_channels=3, sess=None):
-        self.input_height = input_height
-        self.input_width = input_width
+    def __init__(self, config, batch_size=1, input_size=256, output_size=256, input_channels=3, sess=None):
+        self.input_size = input_size
+        self.output_size = output_size
         self.input_channels = input_channels
         self.batch_size = batch_size
-        # pre-tarin VGG19
-        #self.vgg = VGG19()
         self.images_norm = True
         self.config = config
         self.sess = sess
         
     def generator(self, input_x, reuse=False):
-        with tf.variable_scope('generator'):
+        with tf.variable_scope('generator') as scope:
             if reuse:
                 scope.reuse_variables()
             # down_sample here
             # input_x = down_sample_layer(input_x)
-            
+
             with slim.arg_scope([slim.conv2d_transpose],
                                 weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
                                 weights_regularizer=None,
@@ -57,11 +55,16 @@ class SRGAN:
                 # shuffle2 = tf.nn.relu(pixel_shuffle_layer(conv4, 2, 64))
                 # print(shuffle2)
 
-                conv3 = tf.nn.relu(slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3'))
-                conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
-                conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
+                # conv3 = tf.nn.relu(slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3'))
+                # conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
+                # conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
+
+                conv6 = tf.nn.relu(slim.conv2d(conv2_out, 64, 9, 1, padding='VALID', scope='g_conv6'))
+                conv7 = tf.nn.relu(slim.conv2d(conv6, 32, 1, 1, padding='VALID', scope='g_conv7'))
+                conv8 = slim.conv2d(conv7, 3, 5, 1, padding='VALID', scope='g_conv8')
+
                 self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
-                return tf.nn.tanh(conv5)
+                return tf.nn.tanh(conv8)
             
     def discriminator(self, input_x, reuse=False):
         with tf.variable_scope('discriminator') as scope:
@@ -91,11 +94,11 @@ class SRGAN:
                 
                 self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
                 return dense2, tf.nn.sigmoid(dense2)
-            
-            
+
+
     def build_model(self):
-        self.input_target = tf.placeholder(tf.float32, [None, self.input_height, self.input_width, self.input_channels], name='input_target')
-        self.input_source = tf.placeholder(tf.float32, [None, self.input_height, self.input_width, self.input_channels], name='input_source')
+        self.input_target = tf.placeholder(tf.float32, [None, self.output_size, self.output_size, self.input_channels], name='input_target')
+        self.input_source = tf.placeholder(tf.float32, [None, self.input_size, self.input_size, self.input_channels], name='input_source')
         
         # self.input_source = down_sample_layer(self.input_target)
 
@@ -171,7 +174,7 @@ class SRGAN:
         # data/train/*.*
         data = glob(os.path.join(self.config.dataset_dir, 'train', self.config.train_set, '*.*'))
         batch_idxs = int(len(data)/self.batch_size)
-        counter = 1
+
         bool_check, counter = self.load_model(self.config.checkpoint_dir)
         if bool_check:
             print('[!!!] load model successfully')
@@ -188,13 +191,13 @@ class SRGAN:
             for idx in range(batch_idxs):
                 batch_files = data[idx*self.batch_size:(idx+1)*self.batch_size]
                 batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in batch_files]
-                batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+                batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
                 batch_x_input = [input_x[0] for input_x in batch_x]
                 batch_x_sample = [sample_x[1] for sample_x in batch_x]
                 batch_x_input = np.array(batch_x_input).astype(np.float32)
                 batch_x_sample = np.array(batch_x_sample).astype(np.float32)
     
-                if counter < 2e4:                      
+                if counter < 2e4:
                     _, content_loss, psnr = self.sess.run([self.srres_optim, self.content_loss, self.psnr], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
                     end_time = time.time()
                     print('epoch{}[{}/{}]:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, content_loss, psnr))
@@ -203,10 +206,10 @@ class SRGAN:
                     _, g_loss, psnr, summaries= self.sess.run([self.g_optim, self.g_loss, self.psnr, self.summaries], feed_dict={self.input_target:batch_x_sample, self.input_source:batch_x_input})
                     end_time = time.time()
                     print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss, psnr))
-                #self.summary_writer.add_summary(summaries, global_step=counter)
-                if np.mod(counter, 10)==0:
+
+                if np.mod(counter, 50)==0:
                     self.sample(epoch, idx)
-                if np.mod(counter, 100)==0:
+                if np.mod(counter, 200)==0:
                     self.save_model(self.config.checkpoint_dir, counter)
                 counter = counter+1
             
@@ -216,13 +219,20 @@ class SRGAN:
         data = data[0]
         # batch_x = [get_images(batch_file, self.config.is_crop, self.config.fine_size, images_norm=False) for batch_file in data]
         #
-        # batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+        # batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
         # batch_x_input = [input_x[0] for input_x in batch_x]
         # batch_x_sample = [sample_x[1] for sample_x in batch_x]
         # batch_x_input = np.array(batch_x_input).astype(np.float32)
         # batch_x_sample = np.array(batch_x_sample).astype(np.float32)
 
-        h_, w_, input_, sample_ = get_sample_image(data, self.config.fine_size, self.images_norm)
+        h_, w_, input_, sample_ = get_sample_image(data, self.input_size, self.output_size, self.images_norm)
+
+        # save_images(input_, [h_, w_],
+        #             'input.png'.format(self.config.sample_dir, self.config.val_set, epoch, idx),
+        #             self.images_norm)
+        # save_images(sample_, [h_, w_],
+        #             'output.png'.format(self.config.sample_dir, self.config.val_set, epoch, idx),
+        #             self.images_norm)
 
         sample_images, psnr, input_source = self.sess.run([self.fake, self.psnr, self.input_source], feed_dict={self.input_target:sample_, self.input_source:input_})
         
@@ -247,7 +257,7 @@ class SRGAN:
         batch_x = [get_images(batch_file, True, self.config.fine_size, self.images_norm) for batch_file in batch_files]
         batchs = np.array(batch_x).astype(np.float32)
 
-        batch_x = [blur_images(imgs, self.images_norm) for imgs in batch_x]
+        batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
         batch_x_input = [input_x[0] for input_x in batch_x]
         batch_x_sample = [sample_x[1] for sample_x in batch_x]
         batch_x_input = np.array(batch_x_input).astype(np.float32)

@@ -32,19 +32,19 @@ class SRGAN:
                                 activation_fn=None,
                                 normalizer_fn=None,
                                 padding='VALID'):
-                input_x_padding = add_padding(input_x, 33, 3, 1)
-                conv1 = tf.nn.relu(slim.conv2d(input_x_padding, 64, 3, 1, scope='g_conv1'))
+                input_x_padding = add_padding(input_x, 33, 7, 1)
+                conv1 = tf.nn.relu(slim.conv2d(input_x_padding, 64, 7, 1, scope='g_conv1'))
                 print(conv1)
                 shortcut = conv1
                 # res_block(input_x, out_channels=64, k=3, s=1, scope='res_block'):
-                res1 = res_block(conv1, 64, 3, 1, scope='g_res1')
-                res2 = res_block(res1, 64, 3, 1, scope='g_res2')
-                res3 = res_block(res2, 64, 3, 1, scope='g_res3')
-                res4 = res_block(res3, 64, 3, 1, scope='g_res4')
-                res5 = res_block(res4, 64, 3, 1, scope='g_res5')
+                res1 = res_block(conv1, 64, 7, 1, scope='g_res1')
+                res2 = res_block(res1, 64, 7, 1, scope='g_res2')
+                res3 = res_block(res2, 64, 7, 1, scope='g_res3')
+                res4 = res_block(res3, 64, 7, 1, scope='g_res4')
+                res5 = res_block(res4, 64, 7, 1, scope='g_res5')
 
-                res5_padding = add_padding(res5, 33, 3, 1)
-                conv2 = slim.batch_norm(slim.conv2d(res5_padding, 64, 3, 1, scope='g_conv2', padding='VALID')
+                res5_padding = add_padding(res5, 33, 7, 1)
+                conv2 = slim.batch_norm(slim.conv2d(res5_padding, 64, 7, 1, scope='g_conv2', padding='VALID')
                                         , scope='g_bn_conv2')
                 print(conv2)
                 conv2_out = shortcut+conv2
@@ -58,11 +58,11 @@ class SRGAN:
                 # shuffle2 = tf.nn.relu(pixel_shuffle_layer(conv4, 2, 64))
                 # print(shuffle2)
 
-                conv2_out_padding = add_padding(conv2_out, 33, 3, 1)
-                conv3 = tf.nn.relu(slim.conv2d(conv2_out_padding, 256, 3, 1, scope='g_conv3', padding='VALID'))
+                conv2_out_padding = add_padding(conv2_out, 33, 7, 1)
+                conv3 = tf.nn.relu(slim.conv2d(conv2_out_padding, 256, 7, 1, scope='g_conv3', padding='VALID'))
 
-                conv3_padding = add_padding(conv3, 33, 3, 1)
-                conv4 = tf.nn.relu(slim.conv2d(conv3_padding, 256, 3, 1, scope='g_conv4'))
+                conv3_padding = add_padding(conv3, 33, 7, 1)
+                conv4 = tf.nn.relu(slim.conv2d(conv3_padding, 256, 7, 1, scope='g_conv4'))
 
                 conv4_padding = add_padding(conv4, 33, 3, 1)
                 conv5 = slim.conv2d(conv4_padding, 3, 3, 1, scope='g_conv5')

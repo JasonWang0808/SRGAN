@@ -177,7 +177,7 @@ class SRGAN:
                 images = np.asarray(sav_images)
                 images = images[:images.shape[0]//8 * 8, :, :, :]
                 batches = images.reshape([-1, self.batch_size, self.input_size, self.input_size, 3])
-                batches = np.random.choice(batches, np.random.randint(batches//8))
+                batches = np.random.choice(batches, np.random.randint(batches.shape[0]//8))
 
                 for batch_x in batches:
                     batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]

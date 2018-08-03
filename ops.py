@@ -2,13 +2,25 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import numpy as np
 
+
+def add_padding(input_x, input_size = 33, kernal_size = 3, stride=1):
+    conv_size = input_size * stride + kernal_size - 1
+    left_top_size = (conv_size - input_size) // 2
+
+    new_conv = tf.pad(input_x, [[0,0], [left_top_size, left_top_size], [left_top_size, left_top_size], [0, 0]], mode='SYMMETRIC')
+
+    return new_conv
+
+
 def res_block(input_x, out_channels=64, k=3, s=1, scope='res_block'):
     with tf.variable_scope(scope) as scope:
         x = input_x
-        input_x = slim.conv2d_transpose(input_x, out_channels, k, s)
+        input_x = add_padding(input_x, 33, k, s)
+        input_x = slim.conv2d(input_x, out_channels, k, s, padding='VALID')
         input_x = slim.batch_norm(input_x, scope='bn1')
         input_x = tf.nn.relu(input_x)
-        input_x = slim.conv2d_transpose(input_x, out_channels, k, s)
+        input_x = add_padding(input_x, 33, k, s)
+        input_x = slim.conv2d(input_x, out_channels, k, s, padding='VALID')
         input_x = slim.batch_norm(input_x, scope='bn2')
     
     return x+input_x

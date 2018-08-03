@@ -190,9 +190,11 @@ class SRGAN:
                                                               feed_dict={self.input_target: batch_x_sample,
                                                                          self.input_source: batch_x_input})
                         end_time = time.time()
-                        print(
-                            'epoch{}:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch, end_time - start_time,
-                                                                                                     content_loss, psnr))
+                        if counter == 100:
+                            print(
+                                'epoch{}:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch,
+                                                                                                  end_time - start_time,
+                                                                                                  content_loss, psnr))
                     else:
                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries],
                                                              feed_dict={self.input_target: batch_x_sample,
@@ -201,10 +203,12 @@ class SRGAN:
                                                                    feed_dict={self.input_target: batch_x_sample,
                                                                               self.input_source: batch_x_input})
                         end_time = time.time()
-                        print('epoch{}:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, end_time - start_time,
-                                                                                                               d_loss,
-                                                                                                               g_loss,
-                                                                                                               psnr))
+                        if counter == 100:
+                            print('epoch{}:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch,
+                                                                                                            end_time - start_time,
+                                                                                                            d_loss,
+                                                                                                            g_loss,
+                                                                                                            psnr))
 
                     if np.mod(counter, 100) == 0:
                         self.sample(epoch)

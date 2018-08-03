@@ -39,7 +39,7 @@ def main(_):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9, allow_growth=True)
     config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
     with tf.Session(config=config) as sess:
-        srgan = SRGAN(FLAGS, batch_size=8, input_size=33, output_size=21, input_channels=3, sess=sess)
+        srgan = SRGAN(FLAGS, batch_size=8, input_size=33, output_size=33, input_channels=3, sess=sess)
         srgan.build_model()
         # srgan.sample(1, 1)
         if FLAGS.is_training:

@@ -55,16 +55,16 @@ class SRGAN:
                 # shuffle2 = tf.nn.relu(pixel_shuffle_layer(conv4, 2, 64))
                 # print(shuffle2)
 
-                # conv3 = tf.nn.relu(slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3'))
-                # conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
-                # conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
+                conv3 = tf.nn.relu(slim.conv2d_transpose(conv2_out, 256, 3, 1, scope='g_conv3'))
+                conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
+                conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
 
-                conv6 = tf.nn.relu(slim.conv2d(conv2_out, 256, 9, 1, padding='VALID', scope='g_conv6'))
-                conv7 = tf.nn.relu(slim.conv2d(conv6, 256, 3, 1, padding='SAME', scope='g_conv7'))
-                conv8 = slim.conv2d(conv7, 3, 5, 1, padding='VALID', scope='g_conv8')
+                # conv6 = tf.nn.relu(slim.conv2d(conv2_out, 256, 9, 1, padding='VALID', scope='g_conv6'))
+                # conv7 = tf.nn.relu(slim.conv2d(conv6, 256, 3, 1, padding='SAME', scope='g_conv7'))
+                # conv8 = slim.conv2d(conv7, 3, 5, 1, padding='VALID', scope='g_conv8')
 
                 self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
-                return tf.nn.tanh(conv8)
+                return tf.nn.tanh(conv5)
             
     def discriminator(self, input_x, reuse=False):
         with tf.variable_scope('discriminator') as scope:

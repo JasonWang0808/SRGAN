@@ -190,7 +190,7 @@ class SRGAN:
                                                               feed_dict={self.input_target: batch_x_sample,
                                                                          self.input_source: batch_x_input})
                         end_time = time.time()
-                        if counter == 100:
+                        if np.mod(counter, 100) == 0:
                             print(
                                 'epoch{}:total_time:{:.4f},content_loss:{:4f},psnr:{:.4f}'.format(epoch,
                                                                                                   end_time - start_time,
@@ -203,7 +203,7 @@ class SRGAN:
                                                                    feed_dict={self.input_target: batch_x_sample,
                                                                               self.input_source: batch_x_input})
                         end_time = time.time()
-                        if counter == 100:
+                        if np.mod(counter, 100) == 0:
                             print('epoch{}:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch,
                                                                                                             end_time - start_time,
                                                                                                             d_loss,

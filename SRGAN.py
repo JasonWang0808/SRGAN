@@ -59,8 +59,8 @@ class SRGAN:
                 # conv4 = tf.nn.relu(slim.conv2d_transpose(conv3, 256, 3, 1, scope='g_conv4'))
                 # conv5 = slim.conv2d_transpose(conv4, 3, 3, 1, scope='g_conv5')
 
-                conv6 = tf.nn.relu(slim.conv2d(conv2_out, 64, 9, 1, padding='VALID', scope='g_conv6'))
-                conv7 = tf.nn.relu(slim.conv2d(conv6, 32, 1, 1, padding='VALID', scope='g_conv7'))
+                conv6 = tf.nn.relu(slim.conv2d(conv2_out, 256, 9, 1, padding='VALID', scope='g_conv6'))
+                conv7 = tf.nn.relu(slim.conv2d(conv6, 256, 3, 1, padding='SAME', scope='g_conv7'))
                 conv8 = slim.conv2d(conv7, 3, 5, 1, padding='VALID', scope='g_conv8')
 
                 self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
@@ -177,6 +177,7 @@ class SRGAN:
                 images = np.asarray(sav_images)
                 images = images[:images.shape[0]//8 * 8, :, :, :]
                 batches = images.reshape([-1, self.batch_size, self.input_size, self.input_size, 3])
+                batches = np.random.choice(batches, np.random.randint(batches//8))
 
                 for batch_x in batches:
                     batch_x = [blur_images(imgs, self.images_norm, self.output_size) for imgs in batch_x]
